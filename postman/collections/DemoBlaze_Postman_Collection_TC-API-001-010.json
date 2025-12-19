@@ -1,0 +1,1114 @@
+{
+  "info": {
+    "name": "DemoBlaze API Test Cases (TC-API-001…010)",
+    "_postman_id": "404f0dbd-9559-40a6-b6e1-8ed0c9cfe13e",
+    "description": "Postman collection generated from TC-API-001…010.\n\nHow to use:\n1) Create an Environment and set baseUrl = https://api.demoblaze.com\n2) Run folder '00 - Setup' once (it sets timestamp/username/password, cookies)\n3) Run folders in order.\n\nNotes:\n- DemoBlaze responses are not strictly RESTful; tests focus on status=200 + body rules.\n- Field names in responses can vary (sometimes wrapped). Scripts try common shapes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Setup",
+      "item": [
+        {
+          "name": "00.1 Set run variables (uses /entries)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "entries"
+              ]
+            },
+            "description": "Used to initialize environment variables via Pre-request Script. You can ignore its response."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = Date.now().toString();",
+                  "pm.environment.set(\"timestamp\", ts);",
+                  "pm.environment.set(\"username\", `api_user_${ts}`);",
+                  "pm.environment.set(\"passwordB64\", \"YXBpX3Rlc3Q=\"); // Base64('api_test')",
+                  "pm.environment.set(\"cookieUser1\", \"user=api_user_01\");",
+                  "pm.environment.set(\"cookieUser2\", \"user=api_user_02\");",
+                  "pm.environment.set(\"cookieRandom\", \"user=random-invalid-token\");",
+                  "pm.environment.set(\"cartItemId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Variables are set', function(){ pm.expect(pm.environment.get('timestamp')).to.exist; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Catalog API",
+      "item": [
+        {
+          "name": "TC-API-001 - GET /entries (product list)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "entries"
+              ]
+            },
+            "description": "Smoke/health-check: gets product list and captures prod_id for later tests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response time ≤ 3000 ms\", function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "pm.test(\"Body is valid JSON\", function () { pm.response.to.be.json; });",
+                  "const json = pm.response.json();",
+                  "const list = unwrapItems(json);",
+                  "pm.test(\"Products list is non-empty\", function () { pm.expect(list).to.be.an('array').that.is.not.empty; });",
+                  "if (list && list.length) {",
+                  "  const keys = Object.keys(list[0]);",
+                  "  pm.environment.set(\"productFieldsSample\", keys.join(\", \"));",
+                  "  const pid = firstProductId(list);",
+                  "  if (pid !== null && pid !== undefined) pm.environment.set(\"prod_id\", pid);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-002 - POST /bycat (cat=phone)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/bycat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "bycat"
+              ]
+            },
+            "description": "Filters products by category 'phone'.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cat\": \"phone\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Body is valid JSON\", function () { pm.response.to.be.json; });",
+                  "const json = pm.response.json();",
+                  "const list = unwrapItems(json);",
+                  "pm.test(\"Response is a JSON array of products\", function () { pm.expect(list).to.be.an('array'); });",
+                  "pm.test(\"All items have category = phone (field name may vary)\", function () {",
+                  "  if (!list) pm.expect.fail(\"Could not unwrap product list from response.\");",
+                  "  const bad = list.filter(p => (p.cat ?? p.category ?? p.Cat ?? null) !== \"phone\");",
+                  "  pm.expect(bad.length).to.equal(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Auth API",
+      "item": [
+        {
+          "name": "TC-API-003 - POST /signup (unique username)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signup"
+              ]
+            },
+            "description": "Creates a new user using a per-run unique username.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"{{username}}\", \"password\": \"{{passwordB64}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get(\"username\")) {",
+                  "  const ts = Date.now().toString();",
+                  "  pm.environment.set(\"timestamp\", ts);",
+                  "  pm.environment.set(\"username\", `api_user_${ts}`);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const text = pm.response.text();",
+                  "pm.test(\"Response does not indicate duplicate-user error\", function () {",
+                  "  pm.expect(hasDuplicateUserError(text)).to.equal(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-003b - POST /signup (repeat same username)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signup"
+              ]
+            },
+            "description": "Same request again: should indicate user already exists.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"{{username}}\", \"password\": \"{{passwordB64}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const text = pm.response.text();",
+                  "pm.test(\"Repeating signup indicates duplicate-user error\", function () {",
+                  "  pm.expect(hasDuplicateUserError(text)).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-004 - POST /login (valid credentials)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Logs in with the user created in TC-API-003 and captures an auth/session value if present.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"{{username}}\", \"password\": \"{{passwordB64}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const text = pm.response.text();",
+                  "pm.test(\"Response indicates successful login (not an obvious failure)\", function () {",
+                  "  pm.expect(indicatesLoginFailure(text)).to.equal(false);",
+                  "});",
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const auth = json.token ?? json.auth ?? json.session ?? json.cookie ?? json.user ?? null;",
+                  "  if (auth !== null && auth !== undefined) pm.environment.set(\"authValue\", String(auth));",
+                  "  else pm.environment.set(\"authValue\", text);",
+                  "} catch (e) {",
+                  "  pm.environment.set(\"authValue\", text);",
+                  "}",
+                  "pm.test(\"Auth/session value captured (best-effort)\", function () {",
+                  "  pm.expect(pm.environment.get(\"authValue\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-006 - /signup invalid payload (Case 1 - username empty)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signup"
+              ]
+            },
+            "description": "Negative signup validation case.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"\", \"password\": \"{{passwordB64}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 (demo behavior)\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response indicates failure (best-effort)\", function () {",
+                  "  const t = pm.response.text().toLowerCase();",
+                  "  const fail = t.includes(\"error\") || t.includes(\"invalid\") || t.includes(\"exists\") || t.includes(\"already\") || t.includes(\"fail\");",
+                  "  pm.expect(fail).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-006 - /signup invalid payload (Case 2 - password empty)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signup"
+              ]
+            },
+            "description": "Negative signup validation case.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"api_user_02\", \"password\": \"\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 (demo behavior)\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response indicates failure (best-effort)\", function () {",
+                  "  const t = pm.response.text().toLowerCase();",
+                  "  const fail = t.includes(\"error\") || t.includes(\"invalid\") || t.includes(\"exists\") || t.includes(\"already\") || t.includes(\"fail\");",
+                  "  pm.expect(fail).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-006 - /signup invalid payload (Case 3 - empty body {})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signup"
+              ]
+            },
+            "description": "Negative signup validation case.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 (demo behavior)\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response indicates failure (best-effort)\", function () {",
+                  "  const t = pm.response.text().toLowerCase();",
+                  "  const fail = t.includes(\"error\") || t.includes(\"invalid\") || t.includes(\"exists\") || t.includes(\"already\") || t.includes(\"fail\");",
+                  "  pm.expect(fail).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-007A - POST /login (malformed JSON body)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Sends malformed JSON to test robustness.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"api_user_01\", \"password\": }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Response returned\", function () { pm.expect(pm.response.code).to.be.oneOf([200,400,415]); });",
+                  "pm.test(\"Not a successful login (no token/session)\", function () {",
+                  "  const t = pm.response.text().toLowerCase();",
+                  "  pm.expect(t.includes(\"token\") || t.includes(\"session\")).to.equal(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-007B - POST /login (wrong Content-Type: text/plain)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Uses wrong Content-Type header to verify the API doesn't authenticate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"api_user_01\", \"password\": \"{{passwordB64}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Response returned\", function () { pm.expect(pm.response.code).to.be.oneOf([200,400,415]); });",
+                  "pm.test(\"Not a successful login (no token/session)\", function () {",
+                  "  const t = pm.response.text().toLowerCase();",
+                  "  pm.expect(t.includes(\"token\") || t.includes(\"session\")).to.equal(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Cart API",
+      "item": [
+        {
+          "name": "TC-API-005a - POST /addtocart (valid prod_id)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/addtocart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addtocart"
+              ]
+            },
+            "description": "Adds a product to cart using cookieUser1 and prod_id captured from /entries.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"id\": \"{{cartItemId}}\", \"cookie\": \"{{cookieUser1}}\", \"prod_id\": \"{{prod_id}}\", \"flag\": true }"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"cartItemId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"prod_id is set (run TC-API-001 first)\", function () { pm.expect(pm.environment.get(\"prod_id\")).to.exist; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-005b - POST /view (verify cart contains prod_id)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Views cart for cookieUser1 and verifies prod_id is present.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieUser1}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function unwrapItems(json) {",
+                  "  if (Array.isArray(json)) return json;",
+                  "  if (json && Array.isArray(json.Items)) return json.Items;",
+                  "  if (json && Array.isArray(json.items)) return json.items;",
+                  "  if (json && Array.isArray(json.entries)) return json.entries;",
+                  "  return null;",
+                  "}",
+                  "",
+                  "function firstProductId(list) {",
+                  "  if (!list || !list.length) return null;",
+                  "  const obj = list[0];",
+                  "  return obj.id ?? obj.prod_id ?? obj.productId ?? obj.itemId ?? null;",
+                  "}",
+                  "",
+                  "function hasDuplicateUserError(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"already\") || t.includes(\"exists\") || t.includes(\"exist\");",
+                  "}",
+                  "",
+                  "function indicatesLoginFailure(text) {",
+                  "  const t = (text || \"\").toLowerCase();",
+                  "  return t.includes(\"wrong\") || t.includes(\"password\") || t.includes(\"does not exist\") || t.includes(\"error\");",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.be.json;",
+                  "const json = pm.response.json();",
+                  "const list = unwrapItems(json) ?? [];",
+                  "const pid = pm.environment.get(\"prod_id\");",
+                  "pm.test(\"Cart contains the added prod_id\", function () {",
+                  "  const found = (list || []).some(it => String(it.prod_id ?? it.id ?? it.productId ?? \"\") === String(pid));",
+                  "  pm.expect(found).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-008A - POST /addtocart (non-existing prod_id)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/addtocart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addtocart"
+              ]
+            },
+            "description": "Attempts to add a non-existing product id. Verification is done via /view.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"id\": \"{{cartItemId}}\", \"cookie\": \"{{cookieUser1}}\", \"prod_id\": \"non-existing-id\", \"flag\": true }"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"cartItemId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200 (demo behavior)', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-008B - POST /view (verify invalid prod_id not added)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Verifies that the invalid prod_id was not added to the cart.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieUser1}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.be.json;",
+                  "const json = pm.response.json();",
+                  "function unwrapItems(j){ if(Array.isArray(j)) return j; if(j && Array.isArray(j.Items)) return j.Items; if(j && Array.isArray(j.items)) return j.items; return []; }",
+                  "const list = unwrapItems(json);",
+                  "pm.test(\"Cart does not contain prod_id = non-existing-id\", function () {",
+                  "  const found = (list || []).some(it => String(it.prod_id ?? it.id ?? it.productId ?? \"\") === \"non-existing-id\");",
+                  "  pm.expect(found).to.equal(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-009A - POST /view (Cookie1 -> Cart1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Views cart for cookieUser1 and stores raw response as cart1_raw.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieUser1}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.environment.set(\"cart1_raw\", pm.response.text());",
+                  "pm.test(\"Cart1 saved\", function(){ pm.expect(pm.environment.get(\"cart1_raw\")).to.exist; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-009B - POST /view (Cookie2 -> Cart2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Views cart for cookieUser2 and stores raw response as cart2_raw.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieUser2}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.environment.set(\"cart2_raw\", pm.response.text());",
+                  "pm.test(\"Cart2 saved\", function(){ pm.expect(pm.environment.get(\"cart2_raw\")).to.exist; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-009C - Compare Cart1 vs Cart2 (no request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Triggers tests to compare previously saved Cart1/Cart2.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieUser1}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const c1 = pm.environment.get(\"cart1_raw\") || \"\";",
+                  "const c2 = pm.environment.get(\"cart2_raw\") || \"\";",
+                  "pm.test(\"Cart1 and Cart2 are recorded\", function(){ pm.expect(c1).to.not.equal(''); pm.expect(c2).to.not.equal(''); });",
+                  "pm.test(\"Cart1 and Cart2 are not identical (best-effort)\", function(){ pm.expect(c1).to.not.equal(c2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-010A - POST /addtocart (random/invalid cookie)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/addtocart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addtocart"
+              ]
+            },
+            "description": "Sends addtocart with a random/invalid cookie.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"id\": \"{{cartItemId}}\", \"cookie\": \"{{cookieRandom}}\", \"prod_id\": \"{{prod_id}}\", \"flag\": true }"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"cartItemId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-API-010B - POST /view (random/invalid cookie)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view"
+              ]
+            },
+            "description": "Views cart using the same random cookie and records the response.",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"cookie\": \"{{cookieRandom}}\" }"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.environment.set(\"randomCart_raw\", pm.response.text());",
+                  "pm.test(\"Random cookie cart response recorded\", function(){ pm.expect(pm.environment.get(\"randomCart_raw\")).to.exist; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
